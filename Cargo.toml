@@ -1,0 +1,19 @@
+[package]
+name = "contrasleuth"
+version = "0.1.0"
+authors = ["androiddevelopment"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+hashlib = "0.1.0"
+clap = "2.33.0"
+rusqlite = "0.20.0"
+chrono = "0.4.10"
+async-std = "1.2.0"
+capnp-rpc = "0.10.0"
+capnp = "0.10.3"
+
+[build-dependencies]
+capnpc = "0.10.2"
