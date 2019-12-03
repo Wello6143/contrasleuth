@@ -17,7 +17,7 @@ mod reconcile_capnp {
 }
 fn main() {
     let matches = App::new("Contrasleuth")
-        .version("0.1.0")
+        .version("prerelease")
         .author("Transparent <transparent.cf@gmail.com>")
         .about("A potent communication tool")
         .arg(
