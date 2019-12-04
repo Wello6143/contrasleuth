@@ -2,10 +2,16 @@ use crate::die_on_error::die_on_error;
 use crate::reconcile_capnp::reconcile as Reconcile;
 use capnp::capability::Promise;
 use capnp::Error;
-use capnp_rpc::pry;
+use capnp_rpc::{pry, rpc_twoparty_capnp, twoparty, RpcSystem};
+use futures::{Future, Stream};
+// https://stackoverflow.com/questions/58611380/is-there-a-way-that-we-can-convert-from-futures-0-1-to-the-standard-library-futu
+use futures_03::compat::Future01CompatExt;
 use rusqlite::{params, Connection};
 use std::convert::TryInto;
 use std::include_str;
+use std::net::SocketAddr;
+use tokio_core::reactor;
+use tokio_io::AsyncRead;
 
 struct ReconcileRPCServer {
     connection: Connection,
@@ -66,7 +72,7 @@ impl Reconcile::Server for ReconcileRPCServer {
             return Promise::ok(());
         }
         return Promise::err(Error {
-            description: "message does not exist".to_string(),
+            description: "message does not exist or has expired".to_string(),
             kind: capnp::ErrorKind::Failed,
         });
     }
@@ -79,4 +85,28 @@ impl Reconcile::Server for ReconcileRPCServer {
         let hashes = pry!(pry!(params.get()).get_hashes());
         Promise::ok(())
     }
+}
+
+pub async fn init_server(address: SocketAddr, connection: Connection) {
+    let mut core = die_on_error(reactor::Core::new());
+    let handle = core.handle();
+    let listener = die_on_error(tokio_core::net::TcpListener::bind(&address, &handle));
+    let reconcile = Reconcile::ToClient::new(ReconcileRPCServer::new(connection))
+        .into_client::<capnp_rpc::Server>();
+    let handle1 = handle.clone();
+    let done = listener.incoming().for_each(move |(socket, _)| {
+        socket.set_nodelay(true)?;
+        let (reader, writer) = socket.split();
+        let handle = handle1.clone();
+        let network = twoparty::VatNetwork::new(
+            reader,
+            writer,
+            rpc_twoparty_capnp::Side::Server,
+            Default::default(),
+        );
+        let rpc_system = RpcSystem::new(Box::new(network), Some(reconcile.clone().client));
+        handle.spawn(rpc_system.map_err(|_| ()));
+        Ok(())
+    });
+    die_on_error(done.compat().await);
 }

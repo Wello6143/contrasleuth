@@ -1,20 +1,17 @@
-extern crate capnp;
-extern crate capnp_rpc;
-extern crate chrono;
-extern crate clap;
-extern crate rusqlite;
+// https://abronan.com/getting-started-with-capnproto-rpc-for-rust/
 use clap::{App, Arg};
 use rusqlite::{params, Connection};
 use std::include_str;
 use std::net::SocketAddr;
 use std::process::exit;
-mod connect_reconcile;
 mod die_on_error;
 mod log;
+mod reconcile_server;
 use die_on_error::die_on_error;
 mod reconcile_capnp {
     include!(concat!(env!("OUT_DIR"), "/capnp/reconcile_capnp.rs"));
 }
+use async_std::task;
 fn main() {
     let matches = App::new("Contrasleuth")
         .version("prerelease")
@@ -41,15 +38,15 @@ fn main() {
         .get_matches();
 
     let database_path = matches.value_of("database").unwrap();
-    let address = matches.value_of("address").unwrap();
+    let address = matches.value_of("address").unwrap().to_owned();
 
-    match address.parse::<SocketAddr>() {
-        Ok(_) => {}
+    let parsed_address = match address.parse::<SocketAddr>() {
+        Ok(address) => address,
         Err(_) => {
             log::fatal("TCP listen address is invalid");
             exit(1);
         }
-    }
+    };
 
     let connection = match Connection::open(database_path) {
         Ok(connection) => connection,
@@ -65,4 +62,12 @@ fn main() {
 
     log::welcome("Welcome to Contrasleuth, a potent communication tool");
     log::welcome("Contrasleuth provides adequate protections for most users. Refer to the guide at https://contrasleuth.cf/warnings to better protect yourself.");
+
+    log::notice(format!(
+        "Listening for incoming TCP connections on {}",
+        address
+    ));
+    task::block_on(async {
+        reconcile_server::init_server(parsed_address, connection).await;
+    });
 }
