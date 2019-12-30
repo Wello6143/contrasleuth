@@ -1,7 +1,0 @@
-/target
-**/*.rs.bk
-# The folder below contains machine-specific config.
-# Refer to https://mozilla.github.io/firefox-browser-architecture/experiments/2017-09-21-rust-on-android.html
-# for more info.
-.cargo
-database.sqlite
