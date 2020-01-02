@@ -10,11 +10,10 @@ use std::include_str;
 
 #[allow(dead_code)]
 pub async fn reconcile(
-    address: impl async_std::net::ToSocketAddrs,
+    stream: async_std::net::TcpStream,
     connection: std::sync::Arc<rusqlite::Connection>,
     spawner: futures::executor::LocalSpawner,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let stream = async_std::net::TcpStream::connect(&address).await?;
     stream.set_nodelay(true)?;
     let (reader, writer) = stream.split();
     let network = Box::new(twoparty::VatNetwork::new(
@@ -25,7 +24,7 @@ pub async fn reconcile(
     ));
     let mut rpc_system = RpcSystem::new(network, None);
     let reconcile: Reconcile::Client = rpc_system.bootstrap(rpc_twoparty_capnp::Side::Server);
-    spawner.spawn_local_obj(Box::pin(rpc_system.map(|_| ())).into())?;
+    die_on_error(spawner.spawn_local_obj(Box::pin(rpc_system.map(|_| ())).into()));
     let request = reconcile.hashes_request();
     let result = request.send().promise.await?;
     let their_hashes = result.get()?.get_hashes()?;

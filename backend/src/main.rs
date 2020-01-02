@@ -14,6 +14,7 @@ mod reconcile_capnp {
     include!(concat!(env!("OUT_DIR"), "/capnp/reconcile_capnp.rs"));
 }
 use async_std::io;
+use async_std::prelude::*;
 use futures::executor::LocalSpawner;
 use futures::task::LocalSpawn;
 
@@ -29,13 +30,17 @@ fn connect(
                     let exec = futures::executor::LocalPool::new();
                     let spawner = exec.spawner();
                     log::notice(format!("Connecting to {}", address));
-                    match reconcile_client::reconcile(
-                        address.to_owned(),
-                        connection.clone(),
-                        spawner,
-                    )
-                    .await
-                    {
+                    let stream = match async_std::net::TcpStream::connect(&address).await {
+                        Ok(stream) => stream,
+                        Err(error) => {
+                            log::warning(format!(
+                                "Connection to {} failed: {:?}, reconnecting",
+                                address, error
+                            ));
+                            continue;
+                        }
+                    };
+                    match reconcile_client::reconcile(stream, connection.clone(), spawner).await {
                         Ok(_) => {
                             log::warning(format!(
                                 "Connection to {} completed, reconnecting",
@@ -79,6 +84,14 @@ fn main() {
                 .takes_value(true)
                 .required(true),
         )
+        .arg(
+            Arg::with_name("reverse client address")
+                .short("r")
+                .long("reverse-address")
+                .value_name("REVERSE_ADDRESS")
+                .help("Sets the reverse reconciliation client address")
+                .takes_value(true),
+        )
         .get_matches();
 
     let database_path = matches.value_of("database").unwrap();
@@ -90,6 +103,22 @@ fn main() {
             log::fatal("TCP listen address is invalid");
             exit(1);
         }
+    };
+
+    let reverse_address = match matches.value_of("reverse client address") {
+        Some(value) => Some(value.to_owned()),
+        None => None,
+    };
+
+    let parsed_reverse_address = match reverse_address.to_owned() {
+        Some(address) => match address.parse::<SocketAddr>() {
+            Ok(address) => Some(address),
+            Err(_) => {
+                log::fatal("Reverse reconciliation client address is invalid");
+                exit(1);
+            }
+        },
+        None => None,
     };
 
     let connection = std::sync::Arc::new(match Connection::open(database_path) {
@@ -108,26 +137,28 @@ fn main() {
     log::welcome("Contrasleuth provides adequate protections for most users. Refer to the guide at https://contrasleuth.cf/warnings to better protect yourself.");
     log::welcome("Tip: Input a socket address through STDIN makes Contrasleuth connect to it");
     log::notice(format!(
-        "Listening for incoming TCP connections on {}",
+        "Listening for incoming client connections on {}",
         address
     ));
+
+    if let Some(address) = reverse_address.to_owned() {
+        log::notice(format!(
+            "Listening for incoming reverse server connections on {}",
+            address
+        ));
+    }
+
     let mut exec = futures::executor::LocalPool::new();
     let spawner = exec.spawner();
 
-    let server_handle = spawner.clone();
+    let spawner_clone = spawner.clone();
 
-    let connection_clone_1 = connection.clone();
+    let connection_clone = connection.clone();
     die_on_error(
         spawner.spawn_local_obj(
             Box::new(async move {
-                match reconcile_server::init_server(
-                    parsed_address,
-                    connection_clone_1.clone(),
-                    server_handle,
-                )
-                .await
-                {
-                    Ok(_) => {}
+                let listener = match async_std::net::TcpListener::bind(&parsed_address).await {
+                    Ok(listener) => listener,
                     Err(error) => {
                         log::fatal(format!(
                             "Failed to bind to {} due to error {:?}",
@@ -135,14 +166,107 @@ fn main() {
                         ));
                         exit(1);
                     }
+                };
+                let mut incoming = listener.incoming();
+                let spawner_clone2 = spawner_clone.clone();
+                while let Some(socket) = incoming.next().await {
+                    match socket {
+                        Ok(socket) => {
+                            let spawner_clone3 = spawner_clone2.clone();
+                            let connection_clone = connection_clone.clone();
+                            die_on_error(
+                                spawner_clone2.spawn_local_obj(
+                                    Box::new(async move {
+                                        if let Err(error) = reconcile_server::init_server(
+                                            socket,
+                                            connection_clone.clone(),
+                                            spawner_clone3.clone(),
+                                        )
+                                        .await
+                                        {
+                                            log::warning(format!(
+                                                "Error occurred while reconciling: {:?}",
+                                                error
+                                            ));
+                                        }
+                                    })
+                                    .into(),
+                                ),
+                            );
+                        }
+                        Err(error) => {
+                            log::warning(format!(
+                                "Unexpected error while accepting incoming socket: {:?}",
+                                error
+                            ));
+                        }
+                    }
                 }
             })
             .into(),
         ),
     );
 
-    let client_handle = spawner.clone();
-    let connection_clone_2 = connection.clone();
+    let spawner_clone = spawner.clone();
+    if let Some(address) = parsed_reverse_address {
+        let connection_clone = connection.clone();
+        die_on_error(
+            spawner.spawn_local_obj(
+                Box::new(async move {
+                    let listener = match async_std::net::TcpListener::bind(&address).await {
+                        Ok(listener) => listener,
+                        Err(error) => {
+                            log::fatal(format!(
+                                "Failed to bind to {} due to error {:?}",
+                                reverse_address.unwrap(),
+                                error
+                            ));
+                            exit(1);
+                        }
+                    };
+                    let mut incoming = listener.incoming();
+                    let spawner_clone2 = spawner_clone.clone();
+                    while let Some(socket) = incoming.next().await {
+                        match socket {
+                            Ok(socket) => {
+                                let spawner_clone3 = spawner_clone2.clone();
+                                let connection_clone = connection_clone.clone();
+                                die_on_error(
+                                    spawner_clone2.spawn_local_obj(
+                                        Box::new(async move {
+                                            if let Err(error) = reconcile_client::reconcile(
+                                                socket,
+                                                connection_clone,
+                                                spawner_clone3.clone(),
+                                            )
+                                            .await
+                                            {
+                                                log::warning(format!(
+                                                    "Error occurred while reconciling: {:?}",
+                                                    error
+                                                ));
+                                            }
+                                        })
+                                        .into(),
+                                    ),
+                                );
+                            }
+                            Err(error) => {
+                                log::warning(format!(
+                                    "Unexpected error while accepting incoming socket: {:?}",
+                                    error
+                                ));
+                            }
+                        }
+                    }
+                })
+                .into(),
+            ),
+        );
+    }
+
+    let spawner_clone = spawner.clone();
+    let connection_clone = connection.clone();
     die_on_error(
         spawner.spawn_local_obj(
             Box::new(async move {
@@ -152,8 +276,8 @@ fn main() {
                         Ok(_) => {
                             connect(
                                 address.trim().to_owned(),
-                                connection_clone_2.clone(),
-                                client_handle.clone(),
+                                connection_clone.clone(),
+                                spawner_clone.clone(),
                             );
                         }
                         Err(error) => {

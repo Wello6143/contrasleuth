@@ -30,6 +30,7 @@ fn get_expected_target(payload_length: u64, time_to_live: u64) -> u64 {
                     / denominator));
     match *target {
         Some(result) => result,
+        // The most difficult proof of work target
         None => 0,
     }
 }

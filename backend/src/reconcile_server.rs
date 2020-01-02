@@ -5,7 +5,7 @@ use capnp::capability::Promise;
 use capnp::Error;
 use capnp_rpc::{pry, rpc_twoparty_capnp, twoparty, RpcSystem};
 use futures::task::LocalSpawn;
-use futures::{AsyncReadExt, FutureExt, StreamExt, TryFutureExt};
+use futures::{AsyncReadExt, FutureExt, TryFutureExt};
 use rusqlite::{params, Connection};
 use std::convert::TryInto;
 use std::include_str;
@@ -98,31 +98,21 @@ impl Reconcile::Server for ReconcileRPCServer {
 }
 
 pub async fn init_server(
-    address: async_std::net::SocketAddr,
+    stream: async_std::net::TcpStream,
     connection: std::sync::Arc<Connection>,
     spawner: futures::executor::LocalSpawner,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let listener = async_std::net::TcpListener::bind(&address).await?;
     let reconcile = Reconcile::ToClient::new(ReconcileRPCServer::new(connection))
         .into_client::<capnp_rpc::Server>();
-    let mut incoming = listener.incoming();
-    while let Some(socket) = incoming.next().await {
-        let socket = socket?;
-        socket.set_nodelay(true)?;
-        let (reader, writer) = socket.split();
-        let network = twoparty::VatNetwork::new(
-            reader,
-            writer,
-            rpc_twoparty_capnp::Side::Server,
-            Default::default(),
-        );
-        let rpc_system = RpcSystem::new(Box::new(network), Some(reconcile.clone().client));
-        match spawner.spawn_local_obj(Box::pin(rpc_system.map_err(|_| ()).map(|_| ())).into()) {
-            Ok(_) => {}
-            Err(error) => {
-                crate::log::warning(format!("Failed to spawn local object: {:?}", error));
-            }
-        }
-    }
+    stream.set_nodelay(true)?;
+    let (reader, writer) = stream.split();
+    let network = twoparty::VatNetwork::new(
+        reader,
+        writer,
+        rpc_twoparty_capnp::Side::Server,
+        Default::default(),
+    );
+    let rpc_system = RpcSystem::new(Box::new(network), Some(reconcile.clone().client));
+    die_on_error(spawner.spawn_local_obj(Box::pin(rpc_system.map_err(|_| ()).map(|_| ())).into()));
     Ok(())
 }
