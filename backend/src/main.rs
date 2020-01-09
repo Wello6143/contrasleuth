@@ -6,6 +6,7 @@ use std::process::exit;
 mod die_on_error;
 mod log;
 mod message_hash;
+mod mpmc_manual_reset_event;
 mod proof_of_work;
 mod reconcile_client;
 mod reconcile_server;
@@ -17,43 +18,36 @@ use async_std::io;
 use async_std::prelude::*;
 use futures::executor::LocalSpawner;
 use futures::task::LocalSpawn;
+use futures_intrusive::sync::LocalMutex;
 
 fn connect(
     address: String,
-    connection: std::sync::Arc<rusqlite::Connection>,
+    connection: std::rc::Rc<rusqlite::Connection>,
     handle: LocalSpawner,
+    reconciliation_intent: std::rc::Rc<LocalMutex<mpmc_manual_reset_event::MPMCManualResetEvent>>,
 ) {
     die_on_error(
         handle.spawn_local_obj(
             Box::new(async move {
-                loop {
-                    let exec = futures::executor::LocalPool::new();
-                    let spawner = exec.spawner();
-                    log::notice(format!("Connecting to {}", address));
-                    let stream = match async_std::net::TcpStream::connect(&address).await {
-                        Ok(stream) => stream,
-                        Err(error) => {
-                            log::warning(format!(
-                                "Connection to {} failed: {:?}, reconnecting",
-                                address, error
-                            ));
-                            continue;
-                        }
-                    };
-                    match reconcile_client::reconcile(stream, connection.clone(), spawner).await {
-                        Ok(_) => {
-                            log::warning(format!(
-                                "Connection to {} completed, reconnecting",
-                                address
-                            ));
-                        }
-                        Err(error) => {
-                            log::warning(format!(
-                                "Connection to {} failed: {:?}, reconnecting",
-                                address, error
-                            ));
-                        }
+                let exec = futures::executor::LocalPool::new();
+                let spawner = exec.spawner();
+                log::notice(format!("Connecting to {}", address));
+                let stream = match async_std::net::TcpStream::connect(&address).await {
+                    Ok(stream) => stream,
+                    Err(error) => {
+                        log::warning(format!("Connection to {} failed: {:?}", address, error));
+                        return;
                     }
+                };
+                if let Err(error) = reconcile_client::reconcile(
+                    stream,
+                    connection.clone(),
+                    spawner.clone(),
+                    reconciliation_intent,
+                )
+                .await
+                {
+                    log::warning(format!("Connection to {} failed: {:?}", address, error));
                 }
             })
             .into(),
@@ -121,13 +115,14 @@ fn main() {
         None => None,
     };
 
-    let connection = std::sync::Arc::new(match Connection::open(database_path) {
+    let connection = std::rc::Rc::new(match Connection::open(database_path) {
         Ok(connection) => connection,
         Err(_) => {
             log::fatal("Unable to open database file");
             exit(1);
         }
     });
+
     die_on_error(connection.execute(
         include_str!("../sql/A. Schema/1. Initial schema.sql"),
         params![],
@@ -154,6 +149,13 @@ fn main() {
     let spawner_clone = spawner.clone();
 
     let connection_clone = connection.clone();
+
+    let reconciliation_intent = std::rc::Rc::new(LocalMutex::new(
+        mpmc_manual_reset_event::MPMCManualResetEvent::new(),
+        false,
+    ));
+
+    let reconciliation_intent_clone = reconciliation_intent.clone();
     die_on_error(
         spawner.spawn_local_obj(
             Box::new(async move {
@@ -174,6 +176,7 @@ fn main() {
                         Ok(socket) => {
                             let spawner_clone3 = spawner_clone2.clone();
                             let connection_clone = connection_clone.clone();
+                            let reconciliation_intent_clone = reconciliation_intent_clone.clone();
                             die_on_error(
                                 spawner_clone2.spawn_local_obj(
                                     Box::new(async move {
@@ -181,6 +184,7 @@ fn main() {
                                             socket,
                                             connection_clone.clone(),
                                             spawner_clone3.clone(),
+                                            reconciliation_intent_clone.clone(),
                                         )
                                         .await
                                         {
@@ -208,6 +212,7 @@ fn main() {
     );
 
     let spawner_clone = spawner.clone();
+    let reconciliation_intent_clone = reconciliation_intent.clone();
     if let Some(address) = parsed_reverse_address {
         let connection_clone = connection.clone();
         die_on_error(
@@ -231,13 +236,15 @@ fn main() {
                             Ok(socket) => {
                                 let spawner_clone3 = spawner_clone2.clone();
                                 let connection_clone = connection_clone.clone();
+                                let reconciliation_intent = reconciliation_intent_clone.clone();
                                 die_on_error(
                                     spawner_clone2.spawn_local_obj(
                                         Box::new(async move {
                                             if let Err(error) = reconcile_client::reconcile(
                                                 socket,
-                                                connection_clone,
+                                                connection_clone.clone(),
                                                 spawner_clone3.clone(),
+                                                reconciliation_intent.clone(),
                                             )
                                             .await
                                             {
@@ -267,6 +274,7 @@ fn main() {
 
     let spawner_clone = spawner.clone();
     let connection_clone = connection.clone();
+    let reconciliation_intent_clone = reconciliation_intent.clone();
     die_on_error(
         spawner.spawn_local_obj(
             Box::new(async move {
@@ -278,6 +286,7 @@ fn main() {
                                 address.trim().to_owned(),
                                 connection_clone.clone(),
                                 spawner_clone.clone(),
+                                reconciliation_intent_clone.clone(),
                             );
                         }
                         Err(error) => {

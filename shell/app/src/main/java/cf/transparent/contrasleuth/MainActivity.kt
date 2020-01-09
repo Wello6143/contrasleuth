@@ -21,14 +21,12 @@ class MainActivity : AppCompatActivity() {
 
         val webView: WebView = findViewById(R.id.webview)
         webView.loadUrl("file:///android_asset/index.html")
-        // ====== Would you like to execute a child process? =====
         val executable = getCacheFile(this, "contrasleuth.elf")
         executable.setExecutable(true)
         Log.e("ready", executable.path)
         val sh = Runtime.getRuntime().exec(executable.path)
         val outputStream = DataOutputStream(sh.outputStream)
         val bufferedInputStream = BufferedReader(InputStreamReader(sh.inputStream))
-        Log.e("WHAT?", "LOGGED")
         while (true) {
             val line = bufferedInputStream.readLine()
             if (line == null) break
