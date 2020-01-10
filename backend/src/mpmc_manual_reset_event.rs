@@ -23,7 +23,9 @@ impl MPMCManualResetEvent {
     }
 
     pub async fn block(&self, handle: u128) {
-        self.handles.get(&handle).unwrap().wait().await;
+        let handle = self.handles.get(&handle).unwrap();
+        handle.wait().await;
+        handle.reset();
     }
 
     pub fn drop_handle(&mut self, handle: u128) {
