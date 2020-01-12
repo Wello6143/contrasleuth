@@ -70,7 +70,7 @@ pub async fn reconcile(
             .await?
             {
                 let mut query_request = reconcile.query_request();
-                query_request.get().set_hash(hash2.borrow() as &Vec<u8>);
+                query_request.get().set_hash(&hash2);
                 let result = query_request.send().promise.await?;
                 let message = result.get()?.get_message()?;
                 let payload = message.get_payload()?.to_vec();
