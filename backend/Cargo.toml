@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 clap = "2.33.0"
-rusqlite = { version = "0.20.0", features = ["bundled"] }
+rusqlite = { version = "0.21.0", features = ["bundled"] }
 chrono = "0.4.10"
 capnp = "0.11.1"
 capnp-rpc = "0.11.0"
@@ -17,6 +17,8 @@ async-std = "1.0"
 rust-crypto = "0.2.36"
 checked = "0.5.0"
 futures-intrusive = "0.2.2"
+r2d2 = "0.8.8"
+r2d2_sqlite = "0.13.0"
 
 [build-dependencies]
 capnpc = "0.10.2"

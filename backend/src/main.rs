@@ -1,5 +1,6 @@
 use clap::{App, Arg};
-use rusqlite::{params, Connection};
+use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::params;
 use std::include_str;
 use std::net::SocketAddr;
 use std::process::exit;
@@ -22,7 +23,7 @@ use futures_intrusive::sync::LocalMutex;
 
 fn connect(
     address: String,
-    connection: std::rc::Rc<rusqlite::Connection>,
+    connection: std::sync::Arc<r2d2::Pool<SqliteConnectionManager>>,
     handle: LocalSpawner,
     reconciliation_intent: std::rc::Rc<LocalMutex<mpmc_manual_reset_event::MPMCManualResetEvent>>,
 ) {
@@ -115,7 +116,9 @@ fn main() {
         None => None,
     };
 
-    let connection = std::rc::Rc::new(match Connection::open(database_path) {
+    let manager = SqliteConnectionManager::file(database_path);
+
+    let connection = std::sync::Arc::new(match r2d2::Pool::new(manager) {
         Ok(connection) => connection,
         Err(_) => {
             log::fatal("Unable to open database file");
@@ -123,7 +126,7 @@ fn main() {
         }
     });
 
-    die_on_error(connection.execute(
+    die_on_error(die_on_error(connection.get()).execute(
         include_str!("../sql/A. Schema/1. Initial schema.sql"),
         params![],
     ));
