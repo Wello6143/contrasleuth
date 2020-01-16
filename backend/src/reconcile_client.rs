@@ -107,7 +107,7 @@ pub async fn reconcile(
         let channel1 = std::sync::Arc::new(UnbufferedChannel::<Message>::new());
         let channel2 = channel1.clone();
         let connection = connection.clone();
-        std::thread::spawn(move || {
+        task::spawn(async move {
             let connection = die_on_error(connection.get());
             let mut statement = die_on_error(connection.prepare(include_str!(
                 "../sql/B. RPC/4. Retrieve each and every message.sql"
