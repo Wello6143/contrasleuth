@@ -4,7 +4,9 @@ use rusqlite::params;
 use std::include_str;
 use std::net::SocketAddr;
 use std::process::exit;
+mod connect;
 mod die_on_error;
+mod inventory;
 mod log;
 mod message_hash;
 mod mpmc_manual_reset_event;
@@ -12,49 +14,13 @@ mod proof_of_work;
 mod reconcile_client;
 mod reconcile_server;
 use die_on_error::die_on_error;
+mod stdio_ipc;
 mod reconcile_capnp {
     include!(concat!(env!("OUT_DIR"), "/capnp/reconcile_capnp.rs"));
 }
-use async_std::io;
 use async_std::prelude::*;
-use futures::executor::LocalSpawner;
+use async_std::sync::RwLock;
 use futures::task::LocalSpawn;
-use futures_intrusive::sync::LocalMutex;
-
-fn connect(
-    address: String,
-    connection: std::sync::Arc<r2d2::Pool<SqliteConnectionManager>>,
-    handle: LocalSpawner,
-    reconciliation_intent: std::rc::Rc<LocalMutex<mpmc_manual_reset_event::MPMCManualResetEvent>>,
-) {
-    die_on_error(
-        handle.spawn_local_obj(
-            Box::new(async move {
-                let exec = futures::executor::LocalPool::new();
-                let spawner = exec.spawner();
-                log::notice(format!("Connecting to {}", address));
-                let stream = match async_std::net::TcpStream::connect(&address).await {
-                    Ok(stream) => stream,
-                    Err(error) => {
-                        log::warning(format!("Connection to {} failed: {:?}", address, error));
-                        return;
-                    }
-                };
-                if let Err(error) = reconcile_client::reconcile(
-                    stream,
-                    connection.clone(),
-                    spawner.clone(),
-                    reconciliation_intent,
-                )
-                .await
-                {
-                    log::warning(format!("Connection to {} failed: {:?}", address, error));
-                }
-            })
-            .into(),
-        ),
-    );
-}
 
 fn main() {
     let matches = App::new("Contrasleuth")
@@ -133,7 +99,7 @@ fn main() {
 
     log::welcome("Welcome to Contrasleuth, a potent communication tool");
     log::welcome("Contrasleuth provides adequate protections for most users. Refer to the guide at https://contrasleuth.cf/warnings to better protect yourself.");
-    log::welcome("Tip: Input a socket address through STDIN makes Contrasleuth connect to it");
+    log::welcome("Standard streams are being used for interprocess communication");
     log::notice(format!(
         "Listening for incoming client connections on {}",
         address
@@ -153,9 +119,8 @@ fn main() {
 
     let connection_clone = connection.clone();
 
-    let reconciliation_intent = std::rc::Rc::new(LocalMutex::new(
+    let reconciliation_intent = std::rc::Rc::new(RwLock::new(
         mpmc_manual_reset_event::MPMCManualResetEvent::new(),
-        false,
     ));
 
     let reconciliation_intent_clone = reconciliation_intent.clone();
@@ -276,27 +241,10 @@ fn main() {
     }
 
     let spawner_clone = spawner.clone();
-    let connection_clone = connection.clone();
-    let reconciliation_intent_clone = reconciliation_intent.clone();
     die_on_error(
         spawner.spawn_local_obj(
-            Box::new(async move {
-                loop {
-                    let mut address = String::new();
-                    match io::stdin().read_line(&mut address).await {
-                        Ok(_) => {
-                            connect(
-                                address.trim().to_owned(),
-                                connection_clone.clone(),
-                                spawner_clone.clone(),
-                                reconciliation_intent_clone.clone(),
-                            );
-                        }
-                        Err(error) => {
-                            log::warning(format!("Unexpected STDIN error: {:?}", error));
-                        }
-                    }
-                }
+            Box::new(async {
+                stdio_ipc::communicate(reconciliation_intent, connection, spawner_clone).await;
             })
             .into(),
         ),
