@@ -74,14 +74,6 @@ pub async fn reconcile(
             }
         }
 
-        #[derive(Debug)]
-        struct Message {
-            hash: Vec<u8>,
-            payload: Vec<u8>,
-            nonce: i64,
-            expiration_time: i64,
-        };
-
         let connection = connection.clone();
         let connection1 = connection.clone();
         let channel = inventory::hashes(connection);
