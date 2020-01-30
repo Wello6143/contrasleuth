@@ -42,7 +42,7 @@ enum Operation {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-enum Message<'a> {
+pub enum Message<'a> {
     Inventory(Vec<Vec<u8>>),
     Message {
         in_reply_to: &'a str,
@@ -60,9 +60,15 @@ enum Message<'a> {
     ReconcileFailure {
         in_reply_to: &'a str,
     },
+    ServerListenAddress {
+        address: &'a str,
+    },
+    ClientListenAddress {
+        address: &'a str,
+    },
 }
 
-fn format_struct<T: Serialize>(value: &T) -> String {
+pub fn format_struct<T: Serialize>(value: &T) -> String {
     base64::encode(&die_on_error(serde_json::to_string(value)))
 }
 

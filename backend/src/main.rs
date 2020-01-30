@@ -21,6 +21,7 @@ mod reconcile_capnp {
 use async_std::prelude::*;
 use async_std::sync::RwLock;
 use futures::task::LocalSpawn;
+use stdio_ipc::{format_struct, Message};
 
 fn main() {
     let matches = App::new("Contrasleuth")
@@ -138,6 +139,9 @@ fn main() {
                     }
                 };
                 let mut incoming = listener.incoming();
+                log::ipc(format_struct(&Message::ServerListenAddress {
+                    address: &die_on_error(listener.local_addr()).to_string(),
+                }));
                 let spawner_clone2 = spawner_clone.clone();
                 while let Some(socket) = incoming.next().await {
                     match socket {
@@ -198,6 +202,9 @@ fn main() {
                         }
                     };
                     let mut incoming = listener.incoming();
+                    log::ipc(format_struct(&Message::ClientListenAddress {
+                        address: &die_on_error(listener.local_addr()).to_string(),
+                    }));
                     let spawner_clone2 = spawner_clone.clone();
                     while let Some(socket) = incoming.next().await {
                         match socket {
