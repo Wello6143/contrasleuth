@@ -132,7 +132,7 @@ pub async fn init_server(
     connection: std::sync::Arc<r2d2::Pool<SqliteConnectionManager>>,
     spawner: futures::executor::LocalSpawner,
     reconciliation_intent: std::rc::Rc<RwLock<MPMCManualResetEvent>>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), capnp::Error> {
     let reconcile = Reconcile::ToClient::new(ReconcileRPCServer::new(
         connection,
         reconciliation_intent,
@@ -148,15 +148,5 @@ pub async fn init_server(
         Default::default(),
     );
     let rpc_system = RpcSystem::new(Box::new(network), Some(reconcile.clone().client));
-    die_on_error(
-        spawner.spawn_local_obj(
-            Box::new(async move {
-                if let Err(error) = rpc_system.await {
-                    crate::log::warning(format!("Error occurred while reconciling: {:?}", error));
-                }
-            })
-            .into(),
-        ),
-    );
-    Ok(())
+    rpc_system.await
 }

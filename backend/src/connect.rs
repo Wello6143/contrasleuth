@@ -19,11 +19,10 @@ pub fn connect<F1, F2>(
     F2: FnOnce(std::boxed::Box<dyn std::error::Error + std::marker::Send + std::marker::Sync>) -> ()
         + 'static,
 {
+    let handle1 = handle.clone();
     die_on_error(
         handle.spawn_local_obj(
             Box::new(async move {
-                let exec = futures::executor::LocalPool::new();
-                let spawner = exec.spawner();
                 log::notice(format!("Connecting to {}", address));
                 let stream = match async_std::net::TcpStream::connect(&address).await {
                     Ok(stream) => stream,
@@ -35,7 +34,7 @@ pub fn connect<F1, F2>(
                 if let Err(error) = reconcile_client::reconcile(
                     stream,
                     connection.clone(),
-                    spawner.clone(),
+                    handle1,
                     reconciliation_intent,
                 )
                 .await
@@ -57,14 +56,12 @@ pub fn reverse_connect<F1, F2>(
     on_reconcile_failed: F2,
 ) where
     F1: FnOnce(std::io::Error) -> () + 'static,
-    F2: FnOnce(std::boxed::Box<dyn std::error::Error + std::marker::Send + std::marker::Sync>) -> ()
-        + 'static,
+    F2: FnOnce(capnp::Error) -> () + 'static,
 {
+    let handle1 = handle.clone();
     die_on_error(
         handle.spawn_local_obj(
             Box::new(async move {
-                let exec = futures::executor::LocalPool::new();
-                let spawner = exec.spawner();
                 log::notice(format!("Connecting to {}", address));
                 let stream = match async_std::net::TcpStream::connect(&address).await {
                     Ok(stream) => stream,
@@ -76,7 +73,7 @@ pub fn reverse_connect<F1, F2>(
                 if let Err(error) = reconcile_server::init_server(
                     stream,
                     connection.clone(),
-                    spawner.clone(),
+                    handle1,
                     reconciliation_intent,
                 )
                 .await

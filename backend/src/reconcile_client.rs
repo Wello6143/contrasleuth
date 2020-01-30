@@ -18,22 +18,20 @@ pub async fn reconcile(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     stream.set_nodelay(true)?;
     let (reader, writer) = stream.split();
-    let network = Box::new(twoparty::VatNetwork::new(
+    let network = twoparty::VatNetwork::new(
         reader,
         writer,
         rpc_twoparty_capnp::Side::Client,
         Default::default(),
-    ));
-    let mut rpc_system = RpcSystem::new(network, None);
+    );
+    let mut rpc_system = RpcSystem::new(Box::new(network), None);
     let reconcile: Reconcile::Client = rpc_system.bootstrap(rpc_twoparty_capnp::Side::Server);
     let handle = reconciliation_intent.write().await.get_handle();
     let cloned = reconciliation_intent.clone();
     die_on_error(
         spawner.spawn_local_obj(
             Box::new(async move {
-                if let Err(error) = rpc_system.await {
-                    crate::log::warning(format!("Error occurred while reconciling: {:?}", error));
-                }
+                if let Err(_) = rpc_system.await {}
                 cloned.write().await.drop_handle(handle);
             })
             .into(),

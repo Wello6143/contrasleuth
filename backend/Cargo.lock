@@ -89,26 +89,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "capnp"
-version = "0.11.1"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "capnp-futures"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "capnp 0.11.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "capnp 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "capnp-rpc"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "capnp 0.11.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "capnp-futures 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "capnpc 0.11.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "capnp 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "capnp-futures 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "capnpc 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -122,10 +122,10 @@ dependencies = [
 
 [[package]]
 name = "capnpc"
-version = "0.11.1"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "capnp 0.11.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "capnp 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -184,8 +184,8 @@ version = "0.1.0"
 dependencies = [
  "async-std 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "base64 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "capnp 0.11.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "capnp-rpc 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "capnp 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "capnp-rpc 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "capnpc 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "checked 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "chrono 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1000,11 +1000,11 @@ dependencies = [
 "checksum bitflags 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
 "checksum c2-chacha 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "214238caa1bf3a496ec3392968969cab8549f96ff30652c9e56885329315f6bb"
 "checksum capnp 0.10.3 (registry+https://github.com/rust-lang/crates.io-index)" = "b867c15d8ff93c4d81b69c89280840f877331ef2a1fccbaf947afecc68b51a9e"
-"checksum capnp 0.11.1 (registry+https://github.com/rust-lang/crates.io-index)" = "8d47a3132b8eed569c6ae2f644cd4a9a7e73c96042b3e9d38c64fbf20c216172"
-"checksum capnp-futures 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5fdf25e597a72c29900d82285a3934e37a6eaea7af89214f32b4239098fcd9fd"
-"checksum capnp-rpc 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)" = "497498baca65fa28aa6710e1eec2d263ffc3f834b368e8fc7c731b33a0f85bd3"
+"checksum capnp 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)" = "e12c88f0850bda4b226c3365912fa6740a3bfb26065953602ad9daa54172a368"
+"checksum capnp-futures 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e8db791f6877886cbc488019fc9fc7380d101b5bf14784dc4b109ac91238ed35"
+"checksum capnp-rpc 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "0966e19b0ce4121b1353a79b6411c1b8d3c59a71684a4adabdf39683ad81742d"
 "checksum capnpc 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)" = "d2afedfc194b01c6804ad0a10c7139024b99ee3df6a39bb09bdf759067ababff"
-"checksum capnpc 0.11.1 (registry+https://github.com/rust-lang/crates.io-index)" = "904ee00982aa0b212550dfa09f76db5dea92000916c1cccbe826399d6a90fb23"
+"checksum capnpc 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)" = "805e848aeb68f9312f716f7dff14e55db726759f62085c7bdf471ceb43438eef"
 "checksum cc 1.0.50 (registry+https://github.com/rust-lang/crates.io-index)" = "95e28fa049fda1c330bcf9d723be7663a899c4679724b34c81e9f5a326aab8cd"
 "checksum cfg-if 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)" = "4785bdd1c96b2a846b2bd7cc02e86b6b3dbf14e7e53446c4f54c92a361040822"
 "checksum checked 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e82b46c41844dee0195a9eb4691446e58848996aa3a70d97f4966b48790bae69"

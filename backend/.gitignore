@@ -4,3 +4,5 @@ database.sqlite
 .DS_Store
 .devcontainer
 .vscode
+database1.sqlite
+database2.sqlite
