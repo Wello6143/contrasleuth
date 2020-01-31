@@ -32,11 +32,11 @@ enum Operation {
         to_be_cancelled: String,
     },
     EstablishConnection {
-        socket_address: String,
+        address: String,
         operation_id: String,
     },
     EstablishReverseConnection {
-        socket_address: String,
+        address: String,
         operation_id: String,
     },
 }
@@ -224,15 +224,15 @@ pub async fn communicate(
                         flag.store(true, std::sync::atomic::Ordering::Relaxed);
                     }
                     Operation::EstablishConnection {
-                        socket_address,
+                        address,
                         operation_id,
                     } => {
                         let operation_id1 = std::rc::Rc::new(operation_id);
                         let operation_id2 = operation_id1.clone();
-                        let socket_address1 = std::rc::Rc::new(socket_address.clone());
+                        let socket_address1 = std::rc::Rc::new(address.clone());
                         let socket_address2 = socket_address1.clone();
                         connect(
-                            socket_address,
+                            address,
                             connection.clone(),
                             spawner.clone(),
                             reconciliation_intent.clone(),
@@ -257,15 +257,15 @@ pub async fn communicate(
                         );
                     }
                     Operation::EstablishReverseConnection {
-                        socket_address,
+                        address,
                         operation_id,
                     } => {
                         let operation_id1 = std::rc::Rc::new(operation_id);
                         let operation_id2 = operation_id1.clone();
-                        let socket_address1 = std::rc::Rc::new(socket_address.clone());
+                        let socket_address1 = std::rc::Rc::new(address.clone());
                         let socket_address2 = socket_address1.clone();
                         reverse_connect(
-                            socket_address,
+                            address,
                             connection.clone(),
                             spawner.clone(),
                             reconciliation_intent.clone(),

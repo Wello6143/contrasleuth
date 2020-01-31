@@ -6,8 +6,15 @@ struct Message {
     expirationTime @2 :Int64;
 }
 
+struct MaybeMessage {
+    union {
+        none @0 :Void;
+        some @1 :Message;
+    }
+}
+
 interface Reconcile {
     hashes @0 () -> (hashes :List(Data));
-    query @1 (hash :Data) -> (message :Message);
+    query @1 (hash :Data) -> (message :MaybeMessage);
     submit @2 (message :Message);
 }

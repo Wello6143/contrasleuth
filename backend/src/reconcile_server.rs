@@ -72,13 +72,11 @@ impl Reconcile::Server for ReconcileRPCServer {
                 match task::spawn(async move { inventory::retrieve(connection, &hash) }).await {
                     Some(message) => message,
                     None => {
-                        return Err(Error {
-                            description: "message does not exist or has expired".to_string(),
-                            kind: capnp::ErrorKind::Failed,
-                        })
+                        results.get().get_message()?.set_none(());
+                        return Ok(());
                     }
                 };
-            let mut result = results.get().get_message()?;
+            let mut result = results.get().get_message()?.init_some();
             result.set_payload(&message.payload);
             result.set_nonce(message.nonce);
             result.set_expiration_time(message.expiration_time);

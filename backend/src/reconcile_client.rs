@@ -93,17 +93,20 @@ pub async fn reconcile(
                 query_request.get().set_hash(&hash2);
                 let result = query_request.send().promise.await?;
                 let message = result.get()?.get_message()?;
-                let payload = message.get_payload()?.to_vec();
-                let nonce = message.get_nonce();
-                let expiration_time = message.get_expiration_time();
-                if crate::proof_of_work::verify(&payload, nonce, expiration_time) {
-                    task::spawn(async move {
-                        inventory::insert(connection2, &payload, nonce, expiration_time);
-                    });
-                    reconciliation_intent
-                        .read()
-                        .await
-                        .broadcast_to_others(handle);
+                if let crate::reconcile_capnp::maybe_message::Some(message) = message.which()? {
+                    let message = message?;
+                    let payload = message.get_payload()?.to_vec();
+                    let nonce = message.get_nonce();
+                    let expiration_time = message.get_expiration_time();
+                    if crate::proof_of_work::verify(&payload, nonce, expiration_time) {
+                        task::spawn(async move {
+                            inventory::insert(connection2, &payload, nonce, expiration_time);
+                        });
+                        reconciliation_intent
+                            .read()
+                            .await
+                            .broadcast_to_others(handle);
+                    }
                 }
             }
         }
