@@ -16,8 +16,7 @@ pub fn connect<F1, F2>(
     on_reconcile_failed: F2,
 ) where
     F1: FnOnce(std::io::Error) -> () + 'static,
-    F2: FnOnce(std::boxed::Box<dyn std::error::Error + std::marker::Send + std::marker::Sync>) -> ()
-        + 'static,
+    F2: FnOnce(capnp::Error) -> () + 'static,
 {
     let handle1 = handle.clone();
     die_on_error(

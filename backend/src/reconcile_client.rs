@@ -7,6 +7,7 @@ use async_std::task;
 use capnp_rpc::{rpc_twoparty_capnp, twoparty, RpcSystem};
 use futures::task::LocalSpawn;
 use futures::AsyncReadExt;
+use futures_intrusive::channel::LocalUnbufferedChannel;
 use r2d2_sqlite::SqliteConnectionManager;
 use std::collections::HashSet;
 
@@ -15,7 +16,7 @@ pub async fn reconcile(
     connection: std::sync::Arc<r2d2::Pool<SqliteConnectionManager>>,
     spawner: futures::executor::LocalSpawner,
     reconciliation_intent: std::rc::Rc<RwLock<MPMCManualResetEvent>>,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), capnp::Error> {
     stream.set_nodelay(true)?;
     let (reader, writer) = stream.split();
     let network = twoparty::VatNetwork::new(
@@ -27,12 +28,47 @@ pub async fn reconcile(
     let mut rpc_system = RpcSystem::new(Box::new(network), None);
     let reconcile: Reconcile::Client = rpc_system.bootstrap(rpc_twoparty_capnp::Side::Server);
     let handle = reconciliation_intent.write().await.get_handle();
-    let cloned = reconciliation_intent.clone();
+    let reconciliation_intent1 = reconciliation_intent.clone();
+    let reconciliation_intent2 = reconciliation_intent.clone();
+
+    #[derive(Debug)]
+    enum TerminateOrProceed {
+        Terminate(Result<(), capnp::Error>),
+        Proceed,
+    };
+
+    let channel = std::rc::Rc::new(LocalUnbufferedChannel::new());
+    let channel1 = channel.clone();
+    let channel2 = channel.clone();
+
     die_on_error(
         spawner.spawn_local_obj(
             Box::new(async move {
-                if let Err(_) = rpc_system.await {}
-                cloned.write().await.drop_handle(handle);
+                if let Err(error) = rpc_system.await {
+                    if let Err(_) = channel1
+                        .send(TerminateOrProceed::Terminate(Err(error)))
+                        .await
+                    {}
+                } else {
+                    if let Err(_) = channel1.send(TerminateOrProceed::Terminate(Ok(()))).await {}
+                }
+                reconciliation_intent1.write().await.drop_handle(handle);
+            })
+            .into(),
+        ),
+    );
+
+    die_on_error(
+        spawner.spawn_local_obj(
+            Box::new(async move {
+                let event = reconciliation_intent2.read().await.get_event(handle);
+                loop {
+                    event.wait().await;
+                    event.reset();
+                    if let Err(_) = channel2.send(TerminateOrProceed::Proceed).await {
+                        break;
+                    }
+                }
             })
             .into(),
         ),
@@ -72,34 +108,42 @@ pub async fn reconcile(
             }
         }
 
-        let connection = connection.clone();
-        let connection1 = connection.clone();
-        let channel = inventory::hashes(connection);
+        {
+            let connection = connection.clone();
+            let connection1 = connection.clone();
+            let channel = inventory::hashes(connection);
 
-        while let Some(hash) = channel.clone().receive().await {
-            if !hash_set.contains(&hash) {
-                let connection1 = connection1.clone();
-                let message =
-                    match task::spawn(async move { inventory::retrieve(connection1, &hash) }).await
-                    {
-                        Some(message) => message,
-                        None => continue,
-                    };
-                let mut submit_request = reconcile.submit_request();
-                submit_request
-                    .get()
-                    .get_message()?
-                    .set_payload(&message.payload);
-                submit_request.get().get_message()?.set_nonce(message.nonce);
-                submit_request
-                    .get()
-                    .get_message()?
-                    .set_expiration_time(message.expiration_time);
-                submit_request.send().promise.await?;
+            while let Some(hash) = channel.clone().receive().await {
+                if !hash_set.contains(&hash) {
+                    let connection1 = connection1.clone();
+                    let message =
+                        match task::spawn(async move { inventory::retrieve(connection1, &hash) })
+                            .await
+                        {
+                            Some(message) => message,
+                            None => continue,
+                        };
+                    let mut submit_request = reconcile.submit_request();
+                    submit_request
+                        .get()
+                        .get_message()?
+                        .set_payload(&message.payload);
+                    submit_request.get().get_message()?.set_nonce(message.nonce);
+                    submit_request
+                        .get()
+                        .get_message()?
+                        .set_expiration_time(message.expiration_time);
+                    submit_request.send().promise.await?;
+                }
             }
         }
-        let event = reconciliation_intent.read().await.get_event(handle);
-        event.wait().await;
-        event.reset();
+
+        match channel.receive().await {
+            Some(terminate_or_proceed) => match terminate_or_proceed {
+                TerminateOrProceed::Terminate(result) => return result,
+                TerminateOrProceed::Proceed => continue,
+            },
+            None => return Ok(()),
+        }
     }
 }
