@@ -101,7 +101,8 @@ pub async fn reconcile(
                     if crate::proof_of_work::verify(&payload, nonce, expiration_time) {
                         task::spawn(async move {
                             inventory::insert(connection2, &payload, nonce, expiration_time);
-                        });
+                        })
+                        .await;
                         reconciliation_intent
                             .read()
                             .await
@@ -116,7 +117,7 @@ pub async fn reconcile(
             let connection1 = connection.clone();
             let channel = inventory::hashes(connection);
 
-            while let Some(hash) = channel.clone().receive().await {
+            while let Some(hash) = channel.clone().recv().await {
                 if !hash_set.contains(&hash) {
                     let connection1 = connection1.clone();
                     let message =

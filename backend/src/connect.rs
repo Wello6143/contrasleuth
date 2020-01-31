@@ -57,7 +57,6 @@ pub fn reverse_connect<F1, F2>(
     F1: FnOnce(std::io::Error) -> () + 'static,
     F2: FnOnce(capnp::Error) -> () + 'static,
 {
-    let handle1 = handle.clone();
     die_on_error(
         handle.spawn_local_obj(
             Box::new(async move {
@@ -69,13 +68,9 @@ pub fn reverse_connect<F1, F2>(
                         return;
                     }
                 };
-                if let Err(error) = reconcile_server::init_server(
-                    stream,
-                    connection.clone(),
-                    handle1,
-                    reconciliation_intent,
-                )
-                .await
+                if let Err(error) =
+                    reconcile_server::init_server(stream, connection.clone(), reconciliation_intent)
+                        .await
                 {
                     on_reconcile_failed(error);
                 }

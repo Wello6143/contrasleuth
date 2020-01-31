@@ -89,7 +89,7 @@ pub async fn communicate(
                     loop {
                         let channel = inventory::hashes(connection.clone());
                         let mut hashes = Vec::new();
-                        while let Some(hash) = channel.receive().await {
+                        while let Some(hash) = channel.recv().await {
                             hashes.push(hash);
                         }
                         log::ipc(format_struct(&Message::Inventory(hashes)));
@@ -185,7 +185,9 @@ pub async fn communicate(
                                             return;
                                         }
                                     };
-                                    inventory::insert(connection, &payload, nonce, expiration_time);
+                                    task::spawn(async move {
+                                        inventory::insert(connection, &payload, nonce, expiration_time);
+                                    }).await;
                                     reconciliation_intent.read().await.broadcast();
                                     log::ipc(format_struct(&Message::ProofOfWorkCompleted {
                                         in_reply_to: &operation_id,

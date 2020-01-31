@@ -146,7 +146,6 @@ fn main() {
                 while let Some(socket) = incoming.next().await {
                     match socket {
                         Ok(socket) => {
-                            let spawner_clone3 = spawner_clone2.clone();
                             let connection_clone = connection_clone.clone();
                             let reconciliation_intent_clone = reconciliation_intent_clone.clone();
                             die_on_error(
@@ -155,7 +154,6 @@ fn main() {
                                         if let Err(error) = reconcile_server::init_server(
                                             socket,
                                             connection_clone.clone(),
-                                            spawner_clone3.clone(),
                                             reconciliation_intent_clone.clone(),
                                         )
                                         .await

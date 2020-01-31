@@ -1,7 +1,7 @@
 use crate::die_on_error::die_on_error;
 use crate::message_hash::message_hash;
+use async_std::sync::channel;
 use async_std::task;
-use futures_intrusive::channel::UnbufferedChannel;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
@@ -55,22 +55,21 @@ pub fn retrieve(pool: Pool, hash: &[u8]) -> Option<Message> {
     None
 }
 
-pub fn hashes(pool: Pool) -> std::sync::Arc<UnbufferedChannel<Vec<u8>>> {
-    let channel = std::sync::Arc::new(UnbufferedChannel::<Vec<u8>>::new());
-    let channel1 = channel.clone();
+pub fn hashes(pool: Pool) -> async_std::sync::Receiver<Vec<u8>> {
+    let (tx, rx) = channel(1);
     task::spawn(async move {
         let connection = die_on_error(pool.get());
         let mut statement =
             die_on_error(connection.prepare(include_str!("../sql/B. RPC/1. Retrieve hashes.sql")));
         let mut rows = die_on_error(statement.query(params![]));
+        let tx = std::sync::Arc::new(tx);
         while let Some(row) = die_on_error(rows.next()) {
             let stuff: Vec<u8> = die_on_error(row.get(0));
-            let channel = channel.clone();
-            task::block_on(async move {
-                die_on_error(channel.send(stuff).await);
+            let tx = tx.clone();
+            task::spawn(async move {
+                tx.send(stuff).await;
             });
         }
-        channel.close();
     });
-    channel1
+    rx
 }

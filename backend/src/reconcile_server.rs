@@ -8,26 +8,22 @@ use async_std::task;
 use capnp::capability::Promise;
 use capnp::Error;
 use capnp_rpc::{pry, rpc_twoparty_capnp, twoparty, RpcSystem};
-use futures::task::LocalSpawn;
 use futures::AsyncReadExt;
 use r2d2_sqlite::SqliteConnectionManager;
 use std::convert::TryInto;
 struct ReconcileRPCServer {
     connection: std::sync::Arc<r2d2::Pool<SqliteConnectionManager>>,
     reconciliation_intent: std::rc::Rc<RwLock<MPMCManualResetEvent>>,
-    spawner: futures::executor::LocalSpawner,
 }
 
 impl ReconcileRPCServer {
     fn new(
         connection: std::sync::Arc<r2d2::Pool<SqliteConnectionManager>>,
         reconciliation_intent: std::rc::Rc<RwLock<MPMCManualResetEvent>>,
-        spawner: futures::executor::LocalSpawner,
     ) -> ReconcileRPCServer {
         ReconcileRPCServer {
             connection,
             reconciliation_intent,
-            spawner,
         }
     }
 }
@@ -44,7 +40,7 @@ impl Reconcile::Server for ReconcileRPCServer {
             let hashes2 = hashes1.clone();
             task::spawn(async move {
                 let channel = inventory::hashes(connection);
-                while let Some(hash) = channel.receive().await {
+                while let Some(hash) = channel.recv().await {
                     die_on_error(hashes1.lock()).push(hash);
                 }
             })
@@ -92,7 +88,6 @@ impl Reconcile::Server for ReconcileRPCServer {
         let connection1 = self.connection.clone();
         let connection2 = self.connection.clone();
         let reconciliation_intent = self.reconciliation_intent.clone();
-        let spawner = self.spawner.clone();
         let message = pry!(pry!(params.get()).get_message());
         let payload = pry!(message.get_payload()).to_vec();
         let nonce = message.get_nonce();
@@ -111,14 +106,7 @@ impl Reconcile::Server for ReconcileRPCServer {
                 })
                 .await;
                 let cloned = reconciliation_intent.clone();
-                die_on_error(
-                    spawner.spawn_local_obj(
-                        Box::new(async move {
-                            cloned.read().await.broadcast();
-                        })
-                        .into(),
-                    ),
-                );
+                cloned.read().await.broadcast();
             }
             Ok(())
         })
@@ -128,15 +116,11 @@ impl Reconcile::Server for ReconcileRPCServer {
 pub async fn init_server(
     stream: async_std::net::TcpStream,
     connection: std::sync::Arc<r2d2::Pool<SqliteConnectionManager>>,
-    spawner: futures::executor::LocalSpawner,
     reconciliation_intent: std::rc::Rc<RwLock<MPMCManualResetEvent>>,
 ) -> Result<(), capnp::Error> {
-    let reconcile = Reconcile::ToClient::new(ReconcileRPCServer::new(
-        connection,
-        reconciliation_intent,
-        spawner.clone(),
-    ))
-    .into_client::<capnp_rpc::Server>();
+    let reconcile =
+        Reconcile::ToClient::new(ReconcileRPCServer::new(connection, reconciliation_intent))
+            .into_client::<capnp_rpc::Server>();
     stream.set_nodelay(true)?;
     let (reader, writer) = stream.split();
     let network = twoparty::VatNetwork::new(
