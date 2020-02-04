@@ -23,7 +23,6 @@ serde_json = "1.0.44"
 base64 = "0.11.0"
 num_cpus = "1.12.0"
 rand = "0.7.3"
-async-compression = { version = "0.2.0", features = ["futures-bufread", "futures-write", "brotli"] }
 
 [dependencies.rusqlite]
 features = ["bundled"]
