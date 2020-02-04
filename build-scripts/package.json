@@ -4,7 +4,7 @@
   "main": "index.js",
   "license": "MIT",
   "scripts": {
-    "test": "tsc *.ts --esModuleInterop --outDir build && ava --timeout=30s"
+    "test": "tsc *.ts --esModuleInterop --outDir build && ava --timeout=5m"
   },
   "devDependencies": {
     "ava": "^3.1.0"
