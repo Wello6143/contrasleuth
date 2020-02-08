@@ -1,0 +1,8 @@
+{
+  "appId": "cf.contrasleuth",
+  "appName": "frontend",
+  "bundledWebRuntime": false,
+  "npmClient": "npm",
+  "webDir": "build",
+  "cordova": {}
+}
